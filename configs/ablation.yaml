@@ -1,0 +1,28 @@
+models:
+  - name: "urchade/gliner_small-v2.1"
+    short_name: "small"
+    params: "44M"
+  - name: "urchade/gliner_medium-v2.1"
+    short_name: "medium"
+    params: "86M"
+  - name: "urchade/gliner_large-v2.1"
+    short_name: "large"
+    params: "304M"
+
+threshold: 0.5
+
+labels:
+  - gliner_label: "person"
+    conll_label: "PER"
+  - gliner_label: "organization"
+    conll_label: "ORG"
+  - gliner_label: "location"
+    conll_label: "LOC"
+  - gliner_label: "miscellaneous"
+    conll_label: "MISC"
+
+paths:
+  processed_data: "data/processed"
+  results: "results"
+
+seed: 42
