@@ -1,0 +1,25 @@
+base_model: "urchade/gliner_medium-v2.1"
+
+training:
+  max_steps: 2000
+  learning_rate: 1e-5
+  batch_size: 8
+  warmup_ratio: 0.1
+
+labels:
+  - gliner_label: "person"
+    conll_label: "PER"
+  - gliner_label: "organization"
+    conll_label: "ORG"
+  - gliner_label: "location"
+    conll_label: "LOC"
+  - gliner_label: "miscellaneous"
+    conll_label: "MISC"
+
+paths:
+  processed_data: "data/processed"
+  results: "results"
+  models: "models"
+
+seed: 42
+threshold: 0.5
