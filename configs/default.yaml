@@ -1,0 +1,21 @@
+model:
+  name: "knowledgator/gliner-multitask-large-v0.5"
+  threshold: 0.5
+
+labels:
+  - gliner_label: "person"
+    conll_label: "PER"
+  - gliner_label: "organization"
+    conll_label: "ORG"
+  - gliner_label: "location"
+    conll_label: "LOC"
+  - gliner_label: "miscellaneous"
+    conll_label: "MISC"
+
+paths:
+  raw_data: "data/raw"
+  processed_data: "data/processed"
+  results: "results"
+  cleanconll_repo: "data/cleanconll_repo"
+
+seed: 42

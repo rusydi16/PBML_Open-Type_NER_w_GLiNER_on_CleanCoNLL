@@ -1,0 +1,33 @@
+# Data (user must provide)
+data/raw/*.txt
+data/raw/eng.*
+data/cleanconll_repo/
+data/processed/
+
+# Results (generated)
+results/*.json
+results/*.csv
+results/*.md
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+# Environment
+.venv/
+venv/
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
