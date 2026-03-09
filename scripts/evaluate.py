@@ -32,6 +32,17 @@ def main() -> None:
         default="test",
         help="Data split to evaluate (default: test)",
     )
+    parser.add_argument(
+        "--bootstrap",
+        action="store_true",
+        help="Run bootstrap significance testing (slower)",
+    )
+    parser.add_argument(
+        "--n-bootstrap",
+        type=int,
+        default=1000,
+        help="Number of bootstrap iterations (default: 1000)",
+    )
     args = parser.parse_args()
 
     # Load config
@@ -160,6 +171,52 @@ def main() -> None:
     ]
     for k in count_keys:
         print(f"    {k}: {noise_agg[k]}")
+
+    # Bootstrap significance testing (optional)
+    if args.bootstrap:
+        from src.statistical_tests import bootstrap_entity_f1, paired_bootstrap_test
+
+        print(f"\n{'='*60}")
+        print(f"Bootstrap Significance Testing ({split})")
+        print(f"{'='*60}")
+
+        # Adapt pred entries: rename "predictions" -> "entities" for bootstrap functions
+        pred_adapted = {}
+        for dataset in datasets:
+            pred_adapted[dataset] = [
+                {"id": s["id"], "entities": s["predictions"]} for s in pred[dataset]
+            ]
+
+        bootstrap_results = {}
+        for dataset in datasets:
+            print(f"  Running bootstrap for {dataset} (n={args.n_bootstrap})...")
+            bs = bootstrap_entity_f1(
+                gold[dataset],
+                pred_adapted[dataset],
+                n_iterations=args.n_bootstrap,
+                seed=config["seed"],
+            )
+            bootstrap_results[dataset] = bs
+
+            bs_path = os.path.join(results_dir, f"bootstrap_{dataset}_{split}.json")
+            with open(bs_path, "w", encoding="utf-8") as f:
+                json.dump(bs, f, indent=2, ensure_ascii=False)
+            print(f"    95% CI: [{bs['ci_lower']:.4f}, {bs['ci_upper']:.4f}]")
+
+        # Paired bootstrap test: conll03 vs cleanconll
+        print(f"  Running paired bootstrap test...")
+        sig = paired_bootstrap_test(
+            gold["conll03"],
+            pred_adapted["conll03"],
+            gold["cleanconll"],
+            pred_adapted["cleanconll"],
+            n_iterations=args.n_bootstrap,
+            seed=config["seed"],
+        )
+        sig_path = os.path.join(results_dir, f"significance_test_{split}.json")
+        with open(sig_path, "w", encoding="utf-8") as f:
+            json.dump(sig, f, indent=2, ensure_ascii=False)
+        print(f"    Delta (cleanconll - conll03): {sig['delta_mean']:.4f} (p={sig['p_value']:.4f})")
 
     print("\nEvaluation complete.")
 
