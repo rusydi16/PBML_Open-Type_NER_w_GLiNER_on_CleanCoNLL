@@ -1,0 +1,51 @@
+{
+  "overall": {
+    "precision": 0.6848,
+    "recall": 0.633,
+    "f1": 0.6579,
+    "tp": 3624,
+    "fp": 1668,
+    "fn": 2101
+  },
+  "per_type": {
+    "PER": {
+      "precision": 0.9219,
+      "recall": 0.912,
+      "f1": 0.9169,
+      "tp": 1451,
+      "fp": 123,
+      "fn": 140
+    },
+    "ORG": {
+      "precision": 0.6399,
+      "recall": 0.5762,
+      "f1": 0.6064,
+      "tp": 1100,
+      "fp": 619,
+      "fn": 809
+    },
+    "LOC": {
+      "precision": 0.6106,
+      "recall": 0.7325,
+      "f1": 0.666,
+      "tp": 1035,
+      "fp": 660,
+      "fn": 378
+    },
+    "MISC": {
+      "precision": 0.125,
+      "recall": 0.0468,
+      "f1": 0.0681,
+      "tp": 38,
+      "fp": 266,
+      "fn": 774
+    }
+  },
+  "errors": {
+    "type_error": 672,
+    "boundary_error": 241,
+    "type_boundary_error": 261,
+    "missing": 927,
+    "spurious": 494
+  }
+}

@@ -49,33 +49,46 @@ def save_gliner_training_data(data: list[dict[str, Any]], filepath: str) -> None
 def finetune_gliner(
     model_name: str,
     train_data: list[dict[str, Any]],
+    eval_data: list[dict[str, Any]],
     output_dir: str,
     max_steps: int = 2000,
     learning_rate: float = 1e-5,
     batch_size: int = 8,
     seed: int = 42,
-    eval_data: list[dict[str, Any]] | None = None,
+    save_steps: int | None = None,
+    save_total_limit: int = 3,
+    warmup_ratio: float = 0.1,
 ) -> Any:
-    """Fine-tune a GLiNER model.
+    """Fine-tune a GLiNER model using the 0.2+ API.
 
-    Imports ``gliner`` inside the function to avoid loading the heavy
-    dependency at module import time.
+    GLiNER 0.2.26 routes training through a Hugging Face Trainer; both
+    ``train_dataset`` and ``eval_dataset`` are required positional arguments,
+    and hyperparameters are passed as ``**training_kwargs`` that
+    ``BaseGLiNER.create_training_args`` forwards to ``TrainingArguments``.
 
-    Returns the trained model.
+    Imports ``gliner`` inside the function to keep it out of module import.
+    Returns the trained model so the caller can run inference or save it.
     """
     from gliner import GLiNER  # type: ignore[import-untyped]
 
     model = GLiNER.from_pretrained(model_name)
 
-    train_params = {
-        "num_steps": max_steps,
-        "train_batch_size": batch_size,
-        "learning_rate": learning_rate,
-        "seed": seed,
-        "save_directory": output_dir,
-    }
-    if eval_data is not None:
-        train_params["val_data_dir"] = eval_data
+    # Auto-derive a reasonable checkpoint cadence so a mid-training crash still
+    # leaves a usable snapshot on disk.
+    if save_steps is None:
+        save_steps = max(max_steps // 4, 250) if max_steps >= 500 else max_steps
 
-    model.train_model(train_data, **train_params)
+    model.train_model(
+        train_dataset=train_data,
+        eval_dataset=eval_data,
+        output_dir=output_dir,
+        learning_rate=learning_rate,
+        per_device_train_batch_size=batch_size,
+        per_device_eval_batch_size=batch_size,
+        max_steps=max_steps,
+        save_steps=save_steps,
+        save_total_limit=save_total_limit,
+        warmup_ratio=warmup_ratio,
+        seed=seed,
+    )
     return model

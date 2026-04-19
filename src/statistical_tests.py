@@ -2,36 +2,26 @@
 
 import numpy as np
 
-from src.metrics import compute_entity_metrics
+from src.data_utils import align_sentences_by_tokens
+from src.metrics import compute_entity_metrics_aggregated
 
 
 def _compute_f1_for_sample(gold_sentences, pred_entries, indices):
     """Compute entity-level F1 for a bootstrap sample of sentence indices.
 
-    Parameters
-    ----------
-    gold_sentences : list[dict]
-        Each dict has keys "id" and "entities" (list of gold entity dicts).
-    pred_entries : list[dict]
-        Each dict has keys "id" and "entities" (list of pred entity dicts).
-    indices : array-like of int
-        Sentence indices (into gold_sentences) to include in this sample.
-
-    Returns
-    -------
-    float
-        The entity-level F1 score for the sampled sentences.
+    Uses per-sentence aggregation so that identical ``(start, end, label)``
+    tuples appearing in different sampled sentences aren't silently collapsed
+    into one by a flat-list ``set()`` — that bug undercounts matches when the
+    bootstrap sample re-uses the same sentence multiple times.
     """
     pred_by_id = {entry["id"]: entry["entities"] for entry in pred_entries}
 
-    all_gold = []
-    all_pred = []
+    pairs = []
     for idx in indices:
         sent = gold_sentences[idx]
-        all_gold.extend(sent["entities"])
-        all_pred.extend(pred_by_id.get(sent["id"], []))
+        pairs.append((sent["entities"], pred_by_id.get(sent["id"], [])))
 
-    metrics = compute_entity_metrics(all_gold, all_pred)
+    metrics = compute_entity_metrics_aggregated(pairs)
     return metrics["f1"]
 
 
@@ -93,8 +83,11 @@ def paired_bootstrap_test(
 ):
     """Paired bootstrap test comparing two NER setups.
 
-    Uses the same bootstrap indices for both systems so the comparison
-    is paired.
+    Sentences are first aligned by token content so the test remains valid
+    when ``gold_a`` and ``gold_b`` cover overlapping-but-not-identical sets
+    (e.g. CoNLL-03 vs CleanCoNLL, where cleaning drops some sentences).
+    Each bootstrap iteration samples indices into the aligned pairs, so the
+    same conceptual sentence is scored for both systems.
 
     Parameters
     ----------
@@ -113,16 +106,25 @@ def paired_bootstrap_test(
     -------
     dict
         Keys: "delta_mean", "delta_std", "delta_ci_lower", "delta_ci_upper",
-        "p_value". Delta = f1_b - f1_a.
+        "p_value", "n_aligned". Delta = f1_b - f1_a.
     """
     rng = np.random.RandomState(seed)
-    n = len(gold_a)
+
+    idx_a, idx_b = align_sentences_by_tokens(gold_a, gold_b)
+    n = len(idx_a)
+    if n == 0:
+        raise ValueError(
+            "Paired bootstrap: no sentences matched between gold_a and gold_b "
+            "(check that tokens are comparable between the two datasets)."
+        )
 
     deltas = np.empty(n_iterations)
     for i in range(n_iterations):
-        indices = rng.randint(0, n, size=n)
-        f1_a = _compute_f1_for_sample(gold_a, pred_a, indices)
-        f1_b = _compute_f1_for_sample(gold_b, pred_b, indices)
+        sample_positions = rng.randint(0, n, size=n)
+        sample_a = [idx_a[j] for j in sample_positions]
+        sample_b = [idx_b[j] for j in sample_positions]
+        f1_a = _compute_f1_for_sample(gold_a, pred_a, sample_a)
+        f1_b = _compute_f1_for_sample(gold_b, pred_b, sample_b)
         deltas[i] = f1_b - f1_a
 
     alpha = 1.0 - confidence
@@ -137,4 +139,5 @@ def paired_bootstrap_test(
         "delta_ci_lower": round(ci_lower, 4),
         "delta_ci_upper": round(ci_upper, 4),
         "p_value": round(p_value, 4),
+        "n_aligned": n,
     }

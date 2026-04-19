@@ -17,7 +17,11 @@ from tqdm import tqdm
 from src.data_utils import load_sentences_json
 from src.finetune import convert_dataset_to_gliner_format, finetune_gliner
 from src.inference import load_gliner_model, predict_sentence, set_seed
-from src.metrics import classify_errors, compute_entity_metrics, compute_per_type_metrics
+from src.metrics import (
+    classify_errors,
+    compute_entity_metrics_aggregated,
+    compute_per_type_metrics_aggregated,
+)
 
 
 def main() -> None:
@@ -39,7 +43,12 @@ def main() -> None:
     parser.add_argument(
         "--skip-training",
         action="store_true",
-        help="Skip training and load existing fine-tuned models",
+        help="Globally skip training and load existing fine-tuned models",
+    )
+    parser.add_argument(
+        "--force-retrain",
+        action="store_true",
+        help="Retrain even when a fine-tuned model already exists on disk",
     )
     args = parser.parse_args()
 
@@ -83,6 +92,15 @@ def main() -> None:
 
     comparison_rows = []
 
+    def _model_dir_has_weights(dirpath: str) -> bool:
+        """A model dir counts as 'already trained' if it holds model weights."""
+        if not os.path.isdir(dirpath):
+            return False
+        for fname in os.listdir(dirpath):
+            if fname.endswith((".safetensors", ".bin", ".pt")):
+                return True
+        return False
+
     for tc in training_configs:
         name = tc["name"]
         display = tc["display"]
@@ -92,29 +110,52 @@ def main() -> None:
         print(f"Training config: {display} ({name})")
         print(f"{'=' * 60}")
 
+        # Per-config resume decision
+        model_exists = _model_dir_has_weights(model_dir)
+        if args.force_retrain:
+            should_train = True
+        elif args.skip_training:
+            should_train = False
+        else:
+            should_train = not model_exists
+            if model_exists:
+                print(f"  Detected existing weights in {model_dir}, skipping training.")
+
         # --- Training or loading ---
-        if not args.skip_training:
-            # Load training sentences
+        if should_train:
+            # Load training sentences.
             train_path = os.path.join(processed_data, f"{name}_train.json")
             print(f"Loading training data: {train_path}")
             train_sentences = load_sentences_json(train_path)
             print(f"  Loaded {len(train_sentences)} training sentences.")
 
-            # Convert to GLiNER format
+            # Load matching dev split as eval data — required by GLiNER 0.2+.
+            # Using the same distribution as training is the honest setup for
+            # in-training validation / save_steps checkpoint selection.
+            dev_path = os.path.join(processed_data, f"{name}_dev.json")
+            print(f"Loading eval data: {dev_path}")
+            dev_sentences = load_sentences_json(dev_path)
+            print(f"  Loaded {len(dev_sentences)} eval sentences.")
+
+            # Convert both to GLiNER format.
             print("Converting to GLiNER format...")
             train_data = convert_dataset_to_gliner_format(train_sentences, conll_to_gliner)
-            print(f"  Converted {len(train_data)} samples.")
+            dev_data = convert_dataset_to_gliner_format(dev_sentences, conll_to_gliner)
+            print(f"  Converted {len(train_data)} train / {len(dev_data)} eval samples.")
 
-            # Fine-tune
+            # Fine-tune.
             print(f"Fine-tuning {config['base_model']} ...")
             os.makedirs(model_dir, exist_ok=True)
+            training_cfg = config["training"]
             model = finetune_gliner(
                 model_name=config["base_model"],
                 train_data=train_data,
+                eval_data=dev_data,
                 output_dir=model_dir,
-                max_steps=config["training"]["max_steps"],
-                learning_rate=float(config["training"]["learning_rate"]),
-                batch_size=config["training"]["batch_size"],
+                max_steps=training_cfg["max_steps"],
+                learning_rate=float(training_cfg["learning_rate"]),
+                batch_size=training_cfg["batch_size"],
+                warmup_ratio=training_cfg.get("warmup_ratio", 0.1),
                 seed=config["seed"],
             )
             print(f"  Model saved to: {model_dir}")
@@ -126,9 +167,15 @@ def main() -> None:
 
         # --- Evaluation on CleanCoNLL test ---
         print(f"\nEvaluating on CleanCoNLL {args.split} set...")
-        all_gold = []
-        all_pred = []
+        per_sentence_pairs = []
         prediction_results = []
+        errors = {
+            "type_error": 0,
+            "boundary_error": 0,
+            "type_boundary_error": 0,
+            "missing": 0,
+            "spurious": 0,
+        }
 
         for sentence in tqdm(eval_sentences, desc=f"Evaluating ({name})"):
             tokens = sentence["tokens"]
@@ -136,8 +183,9 @@ def main() -> None:
             predictions = predict_sentence(
                 model, tokens, gliner_labels, label_map, threshold
             )
-            all_gold.extend(gold_entities)
-            all_pred.extend(predictions)
+            per_sentence_pairs.append((gold_entities, predictions))
+            for k, v in classify_errors(gold_entities, predictions).items():
+                errors[k] += v
             prediction_results.append({
                 "id": sentence["id"],
                 "tokens": tokens,
@@ -145,10 +193,9 @@ def main() -> None:
                 "predictions": predictions,
             })
 
-        # Compute metrics
-        metrics = compute_entity_metrics(all_gold, all_pred)
-        per_type = compute_per_type_metrics(all_gold, all_pred, entity_types)
-        errors = classify_errors(all_gold, all_pred)
+        # Compute metrics with proper per-sentence aggregation.
+        metrics = compute_entity_metrics_aggregated(per_sentence_pairs)
+        per_type = compute_per_type_metrics_aggregated(per_sentence_pairs, entity_types)
 
         print(f"\n  Results for finetuned_{name} on CleanCoNLL {args.split}:")
         print(f"    Precision: {metrics['precision']:.4f}")

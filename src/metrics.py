@@ -59,6 +59,54 @@ def compute_per_type_metrics(gold_entities, pred_entities, entity_types):
     return results
 
 
+def compute_entity_metrics_aggregated(per_sentence_pairs):
+    """Entity-level P/R/F1 aggregated across multiple sentences.
+
+    Takes an iterable of ``(gold_entities, pred_entities)`` tuples — one per
+    sentence — and sums TP/FP/FN over the sentences. This is the correct
+    multi-sentence aggregation: using ``compute_entity_metrics`` on a flat
+    list that crosses sentence boundaries silently deduplicates entities
+    whose ``(start, end, label)`` tuples happen to match across sentences
+    (e.g. two sentences each with ``PER`` at tokens 0-2), which drastically
+    undercounts TP/FP/FN.
+    """
+    total_tp = total_fp = total_fn = 0
+    for gold, pred in per_sentence_pairs:
+        gold_set = {_normalize_entity(e) for e in gold}
+        pred_set = {_normalize_entity(e) for e in pred}
+        total_tp += len(gold_set & pred_set)
+        total_fp += len(pred_set - gold_set)
+        total_fn += len(gold_set - pred_set)
+
+    precision = total_tp / (total_tp + total_fp) if (total_tp + total_fp) > 0 else 0.0
+    recall = total_tp / (total_tp + total_fn) if (total_tp + total_fn) > 0 else 0.0
+    f1 = (2 * precision * recall / (precision + recall)
+          if (precision + recall) > 0 else 0.0)
+    return {
+        "precision": round(precision, 4),
+        "recall": round(recall, 4),
+        "f1": round(f1, 4),
+        "tp": total_tp,
+        "fp": total_fp,
+        "fn": total_fn,
+    }
+
+
+def compute_per_type_metrics_aggregated(per_sentence_pairs, entity_types):
+    """Per-type P/R/F1 aggregated across multiple sentences."""
+    # Materialize once so we can iterate per type without re-consuming.
+    pairs_list = list(per_sentence_pairs)
+    results = {}
+    for etype in entity_types:
+        filtered = [
+            ([e for e in gold if e["label"] == etype],
+             [e for e in pred if e["label"] == etype])
+            for gold, pred in pairs_list
+        ]
+        results[etype] = compute_entity_metrics_aggregated(filtered)
+    return results
+
+
 def classify_errors(gold_entities, pred_entities):
     """Classify non-matching entity pairs into error categories.
 

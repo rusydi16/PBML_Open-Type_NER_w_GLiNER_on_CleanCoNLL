@@ -70,7 +70,7 @@ Once the build script finishes, `prepare_data.py` will be able to read and align
 Run the core evaluation pipeline (data prep, inference, evaluation, report):
 
 ```bash
-bash run_all.sh
+python run_all.py
 ```
 
 ### Full Pipeline (with all enhancements)
@@ -78,18 +78,18 @@ bash run_all.sh
 Run everything including bootstrap significance testing, model size ablation, and fine-tuning comparison:
 
 ```bash
-bash run_all.sh --full
+python run_all.py --full
 ```
 
 ### Individual Enhancement Flags
 
 ```bash
-bash run_all.sh --bootstrap   # Add statistical significance testing
-bash run_all.sh --ablation    # Add model size ablation study
-bash run_all.sh --finetune    # Add fine-tuning comparison
+python run_all.py --bootstrap   # Add statistical significance testing
+python run_all.py --ablation    # Add model size ablation study
+python run_all.py --finetune    # Add fine-tuning comparison
 ```
 
-Flags can be combined: `bash run_all.sh --bootstrap --ablation`
+Flags can be combined: `python run_all.py --bootstrap --ablation`
 
 ## Individual Scripts
 
@@ -166,7 +166,7 @@ After a successful pipeline run, the `results/` directory will contain:
 │   ├── test_statistical_tests.py
 │   └── test_finetune.py
 ├── requirements.txt
-├── run_all.sh                # Full pipeline runner
+├── run_all.py                # Full pipeline runner (cross-platform)
 └── README.md
 ```
 

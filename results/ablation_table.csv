@@ -1,0 +1,4 @@
+model,conll03_f1,cleanconll_f1,f1_delta,noise_penalized
+large,0.548,0.5245,-0.0235,123
+medium,0.6126,0.5871,-0.0255,107
+small,0.6051,0.5809,-0.0242,117

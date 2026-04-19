@@ -1,0 +1,20 @@
+models:
+  - name: "dslim/bert-base-NER"
+    short_name: "bert-ner"
+    family: "hf"
+    display: "BERT-base-NER (CoNLL fine-tuned)"
+    # This checkpoint is fine-tuned on CoNLL-03 train. The key signal in our
+    # study is: does a model explicitly trained on noisy CoNLL labels end up
+    # "agreeing" with CoNLL (high F1 there) but disagreeing with CleanCoNLL?
+
+entity_types:
+  - PER
+  - ORG
+  - LOC
+  - MISC
+
+paths:
+  processed_data: "data/processed"
+  results: "results"
+
+seed: 42

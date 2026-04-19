@@ -1,0 +1,8 @@
+{
+  "delta_mean": -0.0272,
+  "delta_std": 0.0036,
+  "delta_ci_lower": -0.0344,
+  "delta_ci_upper": -0.0203,
+  "p_value": 1.0,
+  "n_aligned": 3367
+}

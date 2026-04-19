@@ -13,9 +13,13 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import yaml
 from tqdm import tqdm
 
-from src.data_utils import load_sentences_json
+from src.data_utils import align_sentences_by_tokens, load_sentences_json
 from src.inference import load_gliner_model, predict_sentence, set_seed
-from src.metrics import classify_errors, compute_entity_metrics, compute_per_type_metrics
+from src.metrics import (
+    classify_errors,
+    compute_entity_metrics_aggregated,
+    compute_per_type_metrics_aggregated,
+)
 from src.noise_analysis import aggregate_noise_analysis, classify_noise_attribution
 
 
@@ -34,6 +38,11 @@ def main() -> None:
         type=str,
         default="test",
         help="Data split to evaluate (default: test)",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Rerun each model even if its output files already exist",
     )
     args = parser.parse_args()
 
@@ -76,6 +85,36 @@ def main() -> None:
         model_results_dir = os.path.join(results_dir, "ablation", short_name)
         os.makedirs(model_results_dir, exist_ok=True)
 
+        # Resume: skip this model if all outputs exist
+        metrics_paths = {
+            d: os.path.join(model_results_dir, f"metrics_{d}_{split}.json")
+            for d in datasets
+        }
+        noise_path = os.path.join(model_results_dir, f"noise_analysis_{split}.json")
+        all_done = (
+            not args.force
+            and all(os.path.exists(p) for p in metrics_paths.values())
+            and os.path.exists(noise_path)
+        )
+        if all_done:
+            print(f"  All outputs exist for {short_name}, loading cached metrics.")
+            dataset_f1 = {}
+            for d, mp in metrics_paths.items():
+                with open(mp, "r", encoding="utf-8") as f:
+                    dataset_f1[d] = json.load(f)["overall"]["f1"]
+            with open(noise_path, "r", encoding="utf-8") as f:
+                noise_agg = json.load(f)
+            f1_delta = dataset_f1.get("cleanconll", 0.0) - dataset_f1.get("conll03", 0.0)
+            summary_rows.append({
+                "model": short_name,
+                "params": params,
+                "conll03_f1": dataset_f1.get("conll03", 0.0),
+                "cleanconll_f1": dataset_f1.get("cleanconll", 0.0),
+                "f1_delta": round(f1_delta, 4),
+                "noise_penalized": noise_agg.get("noise_penalized_correct", 0),
+            })
+            continue
+
         # Load model
         print(f"  Loading model: {model_name}")
         model = load_gliner_model(model_name)
@@ -113,10 +152,9 @@ def main() -> None:
                 json.dump(pred_sentences, f, indent=2, ensure_ascii=False)
             print(f"  Saved predictions to: {pred_path}")
 
-            # Evaluate
+            # Evaluate — keep sentence boundaries so aggregation is correct.
             pred_by_id = {s["id"]: s["predictions"] for s in pred_sentences}
-            all_gold_entities = []
-            all_pred_entities = []
+            per_sentence_pairs = []
             error_counts = {
                 "type_error": 0,
                 "boundary_error": 0,
@@ -129,16 +167,15 @@ def main() -> None:
                 sid = sentence["id"]
                 gold_entities = sentence["entities"]
                 pred_entities = pred_by_id.get(sid, [])
-                all_gold_entities.extend(gold_entities)
-                all_pred_entities.extend(pred_entities)
+                per_sentence_pairs.append((gold_entities, pred_entities))
 
                 sent_errors = classify_errors(gold_entities, pred_entities)
                 for k in error_counts:
                     error_counts[k] += sent_errors[k]
 
-            overall = compute_entity_metrics(all_gold_entities, all_pred_entities)
-            per_type = compute_per_type_metrics(
-                all_gold_entities, all_pred_entities, entity_types
+            overall = compute_entity_metrics_aggregated(per_sentence_pairs)
+            per_type = compute_per_type_metrics_aggregated(
+                per_sentence_pairs, entity_types
             )
             dataset_f1[dataset] = overall["f1"]
 
@@ -159,24 +196,23 @@ def main() -> None:
                 f"R: {overall['recall']:.4f}  F1: {overall['f1']:.4f}"
             )
 
-        # Noise attribution analysis
+        # Noise attribution analysis — align sentences by token content
+        # (sequential IDs are not stable across CoNLL and CleanCoNLL).
         print(f"\n  Running noise attribution analysis...")
         pred_conll_by_id = {s["id"]: s["predictions"] for s in predictions["conll03"]}
-        gold_conll_by_id = {s["id"]: s["entities"] for s in gold["conll03"]}
-        gold_clean_by_id = {s["id"]: s["entities"] for s in gold["cleanconll"]}
-
-        common_ids = (
-            set(pred_conll_by_id.keys())
-            & set(gold_conll_by_id.keys())
-            & set(gold_clean_by_id.keys())
+        idx_conll, idx_clean = align_sentences_by_tokens(
+            gold["conll03"], gold["cleanconll"]
         )
 
         per_sentence_results = []
-        for sid in sorted(common_ids):
+        for ci, kk in zip(idx_conll, idx_clean):
+            conll_sent = gold["conll03"][ci]
+            clean_sent = gold["cleanconll"][kk]
+            pred_entities = pred_conll_by_id.get(conll_sent["id"], [])
             result = classify_noise_attribution(
-                pred_conll_by_id[sid],
-                gold_conll_by_id[sid],
-                gold_clean_by_id[sid],
+                pred_entities,
+                conll_sent["entities"],
+                clean_sent["entities"],
             )
             per_sentence_results.append(result)
 

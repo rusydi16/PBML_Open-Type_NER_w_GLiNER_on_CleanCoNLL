@@ -1,0 +1,165 @@
+{
+  "correct_both": 4792,
+  "noise_penalized_correct": 169,
+  "model_learned_noise": 294,
+  "genuine_error": 1077,
+  "missed_conll_only": 162,
+  "missed_clean_only": 368,
+  "missed_both": 231,
+  "noise_penalized_correct_examples": [
+    {
+      "start": 7,
+      "end": 8,
+      "label": "ORG"
+    },
+    {
+      "start": 7,
+      "end": 9,
+      "label": "MISC"
+    },
+    {
+      "start": 2,
+      "end": 3,
+      "label": "MISC"
+    },
+    {
+      "start": 3,
+      "end": 5,
+      "label": "MISC"
+    },
+    {
+      "start": 0,
+      "end": 1,
+      "label": "ORG"
+    },
+    {
+      "start": 5,
+      "end": 6,
+      "label": "MISC"
+    },
+    {
+      "start": 27,
+      "end": 30,
+      "label": "LOC"
+    },
+    {
+      "start": 0,
+      "end": 1,
+      "label": "ORG"
+    },
+    {
+      "start": 0,
+      "end": 1,
+      "label": "MISC"
+    },
+    {
+      "start": 0,
+      "end": 2,
+      "label": "MISC"
+    }
+  ],
+  "model_learned_noise_examples": [
+    {
+      "start": 2,
+      "end": 3,
+      "label": "LOC"
+    },
+    {
+      "start": 15,
+      "end": 16,
+      "label": "LOC"
+    },
+    {
+      "start": 0,
+      "end": 1,
+      "label": "LOC"
+    },
+    {
+      "start": 23,
+      "end": 24,
+      "label": "LOC"
+    },
+    {
+      "start": 1,
+      "end": 2,
+      "label": "LOC"
+    },
+    {
+      "start": 0,
+      "end": 1,
+      "label": "LOC"
+    },
+    {
+      "start": 10,
+      "end": 11,
+      "label": "LOC"
+    },
+    {
+      "start": 11,
+      "end": 12,
+      "label": "LOC"
+    },
+    {
+      "start": 26,
+      "end": 27,
+      "label": "LOC"
+    },
+    {
+      "start": 7,
+      "end": 8,
+      "label": "LOC"
+    }
+  ],
+  "genuine_error_examples": [
+    {
+      "start": 7,
+      "end": 8,
+      "label": "LOC"
+    },
+    {
+      "start": 4,
+      "end": 5,
+      "label": "PER"
+    },
+    {
+      "start": 2,
+      "end": 3,
+      "label": "MISC"
+    },
+    {
+      "start": 4,
+      "end": 5,
+      "label": "LOC"
+    },
+    {
+      "start": 1,
+      "end": 2,
+      "label": "PER"
+    },
+    {
+      "start": 0,
+      "end": 1,
+      "label": "PER"
+    },
+    {
+      "start": 18,
+      "end": 20,
+      "label": "MISC"
+    },
+    {
+      "start": 0,
+      "end": 1,
+      "label": "PER"
+    },
+    {
+      "start": 0,
+      "end": 1,
+      "label": "PER"
+    },
+    {
+      "start": 14,
+      "end": 15,
+      "label": "PER"
+    }
+  ]
+}

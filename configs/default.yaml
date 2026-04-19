@@ -1,5 +1,10 @@
 model:
-  name: "knowledgator/gliner-multitask-large-v0.5"
+  # Primary model for all RQ1-RQ3 headline results. Kept consistent with the
+  # fine-tune base (urchade/gliner_medium-v2.1) and the ablation medium row so
+  # every figure in the thesis refers to the same architecture.
+  # The former knowledgator/gliner-multitask-large-v0.5 showcase outputs are
+  # archived under results/showcase_multitask_large/ for reference.
+  name: "urchade/gliner_medium-v2.1"
   threshold: 0.5
 
 labels:

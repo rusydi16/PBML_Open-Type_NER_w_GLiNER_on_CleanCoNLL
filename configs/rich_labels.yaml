@@ -1,0 +1,53 @@
+# Rich-label variant of default.yaml — replaces the single "miscellaneous"
+# prompt with several specific prompts that union to CoNLL MISC, and
+# subdivides ORG / LOC into more concrete prompts. Each gliner_label maps
+# back to a canonical CoNLL label for evaluation. Overlapping predictions
+# from different prompts are deduplicated in src/inference.py by keeping
+# the highest-scoring label per span.
+model:
+  name: "urchade/gliner_medium-v2.1"
+  threshold: 0.5
+
+labels:
+  - gliner_label: "person"
+    conll_label: "PER"
+
+  # ORG = company / team / political party / institution
+  - gliner_label: "company"
+    conll_label: "ORG"
+  - gliner_label: "sports team"
+    conll_label: "ORG"
+  - gliner_label: "political party"
+    conll_label: "ORG"
+  - gliner_label: "institution"
+    conll_label: "ORG"
+
+  # LOC = country / city / geographical region
+  - gliner_label: "country"
+    conll_label: "LOC"
+  - gliner_label: "city"
+    conll_label: "LOC"
+  - gliner_label: "geographical region"
+    conll_label: "LOC"
+
+  # MISC = nationality / event / work title / religion / language
+  - gliner_label: "nationality"
+    conll_label: "MISC"
+  - gliner_label: "event"
+    conll_label: "MISC"
+  - gliner_label: "sporting event"
+    conll_label: "MISC"
+  - gliner_label: "title of work"
+    conll_label: "MISC"
+  - gliner_label: "religion"
+    conll_label: "MISC"
+  - gliner_label: "language"
+    conll_label: "MISC"
+
+paths:
+  raw_data: "data/raw"
+  processed_data: "data/processed"
+  results: "results_rich_labels"
+  cleanconll_repo: "data/cleanconll_repo"
+
+seed: 42

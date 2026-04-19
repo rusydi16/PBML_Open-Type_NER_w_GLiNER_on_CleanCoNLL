@@ -11,8 +11,12 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import yaml
 
-from src.data_utils import load_sentences_json
-from src.metrics import classify_errors, compute_entity_metrics, compute_per_type_metrics
+from src.data_utils import align_sentences_by_tokens, load_sentences_json
+from src.metrics import (
+    classify_errors,
+    compute_entity_metrics_aggregated,
+    compute_per_type_metrics_aggregated,
+)
 from src.noise_analysis import aggregate_noise_analysis, classify_noise_attribution
 
 
@@ -77,9 +81,9 @@ def main() -> None:
         # Build pred_by_id dict
         pred_by_id = {s["id"]: s["predictions"] for s in pred[dataset]}
 
-        # Accumulate all gold and pred entities across sentences
-        all_gold_entities = []
-        all_pred_entities = []
+        # Collect per-sentence gold/pred pairs (preserves sentence boundaries
+        # so entity tuples don't collide across sentences during aggregation).
+        per_sentence_pairs = []
         error_counts = {
             "type_error": 0,
             "boundary_error": 0,
@@ -93,17 +97,16 @@ def main() -> None:
             gold_entities = sentence["entities"]
             pred_entities = pred_by_id.get(sid, [])
 
-            all_gold_entities.extend(gold_entities)
-            all_pred_entities.extend(pred_entities)
+            per_sentence_pairs.append((gold_entities, pred_entities))
 
             # Accumulate error classification
             sent_errors = classify_errors(gold_entities, pred_entities)
             for k in error_counts:
                 error_counts[k] += sent_errors[k]
 
-        # Compute overall metrics
-        overall = compute_entity_metrics(all_gold_entities, all_pred_entities)
-        per_type = compute_per_type_metrics(all_gold_entities, all_pred_entities, entity_types)
+        # Compute overall + per-type metrics with per-sentence aggregation.
+        overall = compute_entity_metrics_aggregated(per_sentence_pairs)
+        per_type = compute_per_type_metrics_aggregated(per_sentence_pairs, entity_types)
 
         dataset_f1[dataset] = overall["f1"]
 
@@ -131,26 +134,28 @@ def main() -> None:
     print(f"Noise Attribution Analysis ({split})")
     print(f"{'='*60}")
 
-    # Build lookup dicts
+    # Sentences must be aligned by token content (not by sequential ID),
+    # because CleanCoNLL drops/splits some sentences so position-based IDs
+    # reference different content across the two datasets.
+    idx_conll, idx_clean = align_sentences_by_tokens(gold["conll03"], gold["cleanconll"])
     pred_conll_by_id = {s["id"]: s["predictions"] for s in pred["conll03"]}
-    gold_conll_by_id = {s["id"]: s["entities"] for s in gold["conll03"]}
-    gold_clean_by_id = {s["id"]: s["entities"] for s in gold["cleanconll"]}
-
-    # Find sentence IDs present in all three sources
-    common_ids = (
-        set(pred_conll_by_id.keys())
-        & set(gold_conll_by_id.keys())
-        & set(gold_clean_by_id.keys())
-    )
 
     per_sentence_results = []
-    for sid in sorted(common_ids):
+    for ci, kk in zip(idx_conll, idx_clean):
+        conll_sent = gold["conll03"][ci]
+        clean_sent = gold["cleanconll"][kk]
+        pred_entities = pred_conll_by_id.get(conll_sent["id"], [])
         result = classify_noise_attribution(
-            pred_conll_by_id[sid],
-            gold_conll_by_id[sid],
-            gold_clean_by_id[sid],
+            pred_entities,
+            conll_sent["entities"],
+            clean_sent["entities"],
         )
         per_sentence_results.append(result)
+
+    print(
+        f"  Aligned {len(per_sentence_results)} sentences by token content "
+        f"(of {len(gold['conll03'])} conll / {len(gold['cleanconll'])} clean)."
+    )
 
     noise_agg = aggregate_noise_analysis(per_sentence_results, max_examples=10)
 

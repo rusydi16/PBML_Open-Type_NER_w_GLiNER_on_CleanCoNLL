@@ -67,11 +67,23 @@ def map_gliner_label_to_conll(gliner_label: str, label_map: Dict[str, str]) -> s
     return label_map.get(gliner_label, gliner_label)
 
 
-def load_gliner_model(model_name: str) -> Any:
-    """Load a GLiNER model via GLiNER.from_pretrained."""
+def load_gliner_model(model_name: str, device: str | None = None) -> Any:
+    """Load a GLiNER model and move it to GPU if CUDA is available.
+
+    GLiNER.from_pretrained returns a CPU-resident model by default. Without an
+    explicit .to('cuda') call, inference stays on CPU even when a GPU is
+    available — several-fold slower. Pass ``device`` to override.
+    """
+    import torch
     from gliner import GLiNER
 
-    return GLiNER.from_pretrained(model_name)
+    if device is None:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    model = GLiNER.from_pretrained(model_name)
+    model = model.to(device)
+    print(f"  Model placed on device: {device}")
+    return model
 
 
 def predict_sentence(
@@ -84,6 +96,12 @@ def predict_sentence(
     """Run GLiNER inference on a sentence.
 
     Returns list of dicts with keys: text, start_token, end_token, label, score.
+    When ``label_map`` collapses multiple GLiNER prompts into the same CoNLL
+    label (e.g. ``"country"``, ``"city"`` → ``LOC``) or when different prompts
+    yield conflicting labels on the same span (e.g. ``"country: Japan"`` vs
+    ``"sports team: Japan"``), only the highest-scoring prediction per
+    ``(start_token, end_token)`` span is kept so the evaluator isn't
+    double-counting.
     """
     import torch
 
@@ -94,7 +112,7 @@ def predict_sentence(
             text, gliner_labels, threshold=threshold
         )
 
-    results: List[Dict[str, Any]] = []
+    by_span: Dict[Tuple[int, int], Dict[str, Any]] = {}
     for ent in entities:
         char_start = ent["start"]
         char_end = ent["end"]
@@ -102,13 +120,16 @@ def predict_sentence(
             char_start, char_end, token_offsets
         )
         mapped_label = map_gliner_label_to_conll(ent["label"], label_map)
-        results.append(
-            {
-                "text": ent["text"],
-                "start_token": start_tok,
-                "end_token": end_tok,
-                "label": mapped_label,
-                "score": ent["score"],
-            }
-        )
-    return results
+        candidate = {
+            "text": ent["text"],
+            "start_token": start_tok,
+            "end_token": end_tok,
+            "label": mapped_label,
+            "score": ent["score"],
+        }
+        key = (start_tok, end_tok)
+        existing = by_span.get(key)
+        if existing is None or candidate["score"] > existing["score"]:
+            by_span[key] = candidate
+
+    return list(by_span.values())

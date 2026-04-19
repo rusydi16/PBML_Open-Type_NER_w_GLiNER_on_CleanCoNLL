@@ -1,0 +1,53 @@
+{
+  "model": "finetuned_cleanconll",
+  "eval_split": "cleanconll_test",
+  "overall": {
+    "precision": 0.9209,
+    "recall": 0.9401,
+    "f1": 0.9304,
+    "tp": 5382,
+    "fp": 462,
+    "fn": 343
+  },
+  "per_type": {
+    "PER": {
+      "precision": 0.983,
+      "recall": 0.983,
+      "f1": 0.983,
+      "tp": 1564,
+      "fp": 27,
+      "fn": 27
+    },
+    "ORG": {
+      "precision": 0.9051,
+      "recall": 0.9398,
+      "f1": 0.9221,
+      "tp": 1794,
+      "fp": 188,
+      "fn": 115
+    },
+    "LOC": {
+      "precision": 0.9392,
+      "recall": 0.9292,
+      "f1": 0.9342,
+      "tp": 1313,
+      "fp": 85,
+      "fn": 100
+    },
+    "MISC": {
+      "precision": 0.8144,
+      "recall": 0.8756,
+      "f1": 0.8439,
+      "tp": 711,
+      "fp": 162,
+      "fn": 101
+    }
+  },
+  "errors": {
+    "type_error": 209,
+    "boundary_error": 35,
+    "type_boundary_error": 27,
+    "missing": 72,
+    "spurious": 192
+  }
+}

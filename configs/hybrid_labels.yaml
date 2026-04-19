@@ -1,0 +1,47 @@
+# Hybrid variant: single prompt for PER + ORG (stable in rich_labels), rich
+# prompts for LOC and MISC (where rich labels improved F1). Motivated by the
+# observation in docs/per_label_analysis.md that splitting ORG into
+# company/sports_team/etc REGRESSED ORG F1 by −3 to −4 points, while LOC and
+# MISC benefited from specific sub-category prompts.
+model:
+  name: "urchade/gliner_medium-v2.1"
+  threshold: 0.5
+
+labels:
+  # PER — single prompt (works well; no ambiguity to resolve)
+  - gliner_label: "person"
+    conll_label: "PER"
+
+  # ORG — single prompt (splitting hurt in rich_labels experiment)
+  - gliner_label: "organization"
+    conll_label: "ORG"
+
+  # LOC — rich prompts (boosted +5.6 in rich_labels)
+  - gliner_label: "country"
+    conll_label: "LOC"
+  - gliner_label: "city"
+    conll_label: "LOC"
+  - gliner_label: "geographical region"
+    conll_label: "LOC"
+
+  # MISC — rich prompts (lifted from 0% to 27% in rich_labels)
+  - gliner_label: "nationality"
+    conll_label: "MISC"
+  - gliner_label: "event"
+    conll_label: "MISC"
+  - gliner_label: "sporting event"
+    conll_label: "MISC"
+  - gliner_label: "title of work"
+    conll_label: "MISC"
+  - gliner_label: "religion"
+    conll_label: "MISC"
+  - gliner_label: "language"
+    conll_label: "MISC"
+
+paths:
+  raw_data: "data/raw"
+  processed_data: "data/processed"
+  results: "results_hybrid_labels"
+  cleanconll_repo: "data/cleanconll_repo"
+
+seed: 42

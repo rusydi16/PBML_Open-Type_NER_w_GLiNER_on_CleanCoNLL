@@ -16,6 +16,27 @@ from src.data_utils import load_sentences_json
 from src.inference import load_gliner_model, predict_sentence, set_seed
 
 
+def _save_atomic(path: str, data) -> None:
+    """Write JSON atomically via temp + rename to prevent partial-write corruption."""
+    tmp_path = path + ".tmp"
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+    os.replace(tmp_path, path)
+
+
+def _load_partial_predictions(path: str):
+    """Load existing predictions file. Returns (results_list, set_of_processed_ids)."""
+    if not os.path.exists(path):
+        return [], set()
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            results = json.load(f)
+        return results, {r["id"] for r in results}
+    except (json.JSONDecodeError, KeyError, TypeError):
+        print(f"  WARNING: {path} is unreadable, starting fresh.")
+        return [], set()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Run GLiNER inference on processed datasets."
@@ -38,6 +59,17 @@ def main() -> None:
         default="test",
         help="Data split to use (default: test)",
     )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite existing predictions instead of resuming",
+    )
+    parser.add_argument(
+        "--checkpoint-every",
+        type=int,
+        default=500,
+        help="Write partial predictions every N sentences (default: 500)",
+    )
     args = parser.parse_args()
 
     # Load config
@@ -55,10 +87,17 @@ def main() -> None:
 
     threshold = config["model"]["threshold"]
 
-    # Load GLiNER model
-    print(f"Loading model: {config['model']['name']}")
-    model = load_gliner_model(config["model"]["name"])
-    print("Model loaded successfully.")
+    # GLiNER model is loaded lazily on first use so that fully-resumed runs
+    # avoid paying the model-load cost.
+    model = None
+
+    def _get_model():
+        nonlocal model
+        if model is None:
+            print(f"Loading model: {config['model']['name']}")
+            model = load_gliner_model(config["model"]["name"])
+            print("Model loaded successfully.")
+        return model
 
     # Process each dataset
     for dataset in args.datasets:
@@ -76,13 +115,28 @@ def main() -> None:
         print(f"  Output: {output_path}")
 
         sentences = load_sentences_json(input_path)
-        results = []
-        total_predictions = 0
 
-        for sentence in tqdm(sentences, desc=f"Predicting ({dataset})"):
+        if args.force:
+            results, processed_ids = [], set()
+        else:
+            results, processed_ids = _load_partial_predictions(output_path)
+            if processed_ids:
+                print(f"  Resuming: {len(processed_ids)} sentences already predicted.")
+
+        to_process = [s for s in sentences if s["id"] not in processed_ids]
+        if not to_process:
+            print(f"  All {len(sentences)} sentences already processed, skipping inference.")
+            total_predictions = sum(len(r["predictions"]) for r in results)
+            print(f"  Sentences: {len(results)}  Predictions: {total_predictions}")
+            continue
+
+        total_predictions = sum(len(r["predictions"]) for r in results)
+
+        active_model = _get_model()
+        for i, sentence in enumerate(tqdm(to_process, desc=f"Predicting ({dataset})")):
             tokens = sentence["tokens"]
             predictions = predict_sentence(
-                model, tokens, gliner_labels, label_map, threshold
+                active_model, tokens, gliner_labels, label_map, threshold
             )
             total_predictions += len(predictions)
             results.append(
@@ -93,9 +147,10 @@ def main() -> None:
                 }
             )
 
-        # Save results
-        with open(output_path, "w", encoding="utf-8") as f:
-            json.dump(results, f, indent=2, ensure_ascii=False)
+            if (i + 1) % args.checkpoint_every == 0:
+                _save_atomic(output_path, results)
+
+        _save_atomic(output_path, results)
 
         print(f"  Sentences: {len(results)}")
         print(f"  Total predictions: {total_predictions}")

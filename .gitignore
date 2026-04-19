@@ -1,16 +1,3 @@
-# Data (user must provide)
-data/raw/*.txt
-data/raw/eng.*
-data/cleanconll_repo/
-data/processed/
-
-# Results (generated)
-results/*.json
-results/*.csv
-results/*.md
-results/ablation/
-results/finetune/
-
 # Models (generated)
 models/
 
